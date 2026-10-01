@@ -22,35 +22,44 @@ def main(args: argparse.Namespace) -> list[float]:
     xs = np.linspace(0, 7, num=args.data_size)
     ys = np.sin(xs) + np.random.RandomState(args.seed).normal(0, 0.2, size=args.data_size)
 
+    features = np.empty((args.data_size, 0))
+
     rmses = []
     for order in range(1, args.range + 1):
         # TODO: Create features `(x^1, x^2, ..., x^order)`, preferably in this ordering.
         # Note that you can just append `x^order` to the features from the previous iteration.
-        ...
+        
+        feature = np.power(xs, order).reshape(-1, 1)
+        features = np.hstack((features, feature))
 
         # TODO: Split the data into a train set and a test set.
         # Use `sklearn.model_selection.train_test_split` method call, passing
         # arguments `test_size=args.test_size, random_state=args.seed`.
-        ...
+        
+        train_data, test_data, train_target, test_target = sklearn.model_selection.train_test_split(features, ys, test_size=args.test_size, random_state=args.seed)
 
         # TODO: Fit a linear regression model `sklearn.linear_model.LinearRegression(tol=1e-15)`
         # on the train set using the `fit` method. We use a stricter tolerance `tol=1e-15`
         # as the default tolerance is not sufficient when using features of higher order.
-        model = ...
+        
+        model = sklearn.linear_model.LinearRegression(tol=1e-15)
+        model.fit(train_data, train_target)
 
         # TODO: Predict targets on the test set using the `predict` method of the trained model.
-        ...
+
+        prediction = model.predict(test_data)
 
         # TODO: Compute root mean square error on the test set predictions.
         # You can either do it manually, or you can look at the metrics offered
         # by the `sklearn.metrics` module.
-        rmse = ...
+
+        rmse = sklearn.metrics.root_mean_squared_error(test_target, prediction)
 
         rmses.append(rmse)
 
         if args.plot:
-            # The plotting code assumes the train/test data/targets are in numpy arrays
-            # `train_data`, `train_target`, `test_data`, `test_target`.
+        #     # The plotting code assumes the train/test data/targets are in numpy arrays
+        #     # `train_data`, `train_target`, `test_data`, `test_target`.
             import matplotlib.pyplot as plt
             if args.plot is not True:
                 plt.gcf().get_axes() or plt.figure(figsize=(6.4*3, 4.8*3))
