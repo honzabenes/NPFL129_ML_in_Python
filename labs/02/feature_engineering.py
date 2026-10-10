@@ -2,11 +2,11 @@
 import argparse
 
 import numpy as np
-import sklearn.compose
+from sklearn.compose import ColumnTransformer
 import sklearn.datasets
 import sklearn.model_selection
-import sklearn.pipeline
-import sklearn.preprocessing
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler, OneHotEncoder, PolynomialFeatures
 
 parser = argparse.ArgumentParser()
 # These arguments will be set appropriately by ReCodEx, even if you change them.
@@ -23,6 +23,8 @@ def main(args: argparse.Namespace) -> tuple[np.ndarray, np.ndarray]:
     # TODO: Split the dataset into a train set and a test set.
     # Use `sklearn.model_selection.train_test_split` method call, passing
     # arguments `test_size=args.test_size, random_state=args.seed`.
+
+    train_data, test_data, train_target, test_target = sklearn.model_selection.train_test_split(dataset.data, dataset.target, test_size=args.test_size, random_state=args.seed)
 
     # TODO: Process the input columns in the following way:
     #
@@ -41,6 +43,27 @@ def main(args: argparse.Namespace) -> tuple[np.ndarray, np.ndarray]:
     # and then the real-valued features. To process different dataset columns
     # differently, you can use `sklearn.compose.ColumnTransformer`.
 
+    categorical_features_indices = []
+
+    for j in range(len(train_data[0])):
+        is_catgorical = True
+
+        for i in range(len(train_data)):
+            if train_data[i, j] != np.floor(train_data[i, j]):
+                is_catgorical = False
+
+        if is_catgorical:
+            categorical_features_indices.append(j)
+
+    real_valued_features_indices = [i for i in range(len(train_data[0])) if i not in categorical_features_indices]
+
+    preprocessor = ColumnTransformer(
+        transformers=[
+            ('categorical', OneHotEncoder(sparse_output=False, handle_unknown="ignore"), categorical_features_indices),
+            ('real-valued', StandardScaler(), real_valued_features_indices)
+        ]
+    )
+
     # TODO: To the current features, append polynomial features of order 2.
     # If the input values are `[a, b, c, d]`, you should append
     # `[a^2, ab, ac, ad, b^2, bc, bd, c^2, cd, d^2]`. You can generate such polynomial
@@ -52,13 +75,19 @@ def main(args: argparse.Namespace) -> tuple[np.ndarray, np.ndarray]:
     # by using `sklearn.pipeline.Pipeline`. Although not strictly needed, it is
     # usually comfortable.
 
+    pipeline = Pipeline([
+        ('preprocess', preprocessor),
+        ('polynomial', PolynomialFeatures(2, include_bias=False))
+    ])
+
     # TODO: Fit the feature preprocessing steps (the composed pipeline with all of
     # them; or the individual steps, if you prefer) on the training data (using `fit`).
     # Then transform the training data into `train_data` (with a `transform` call;
     # however, you can combine the two methods into a single `fit_transform` call).
     # Finally, transform testing data to `test_data`.
-    train_data = ...
-    test_data = ...
+
+    train_data = pipeline.fit_transform(train_data, train_target)
+    test_data = pipeline.transform(test_data)
 
     return train_data[:5], test_data[:5]
 
