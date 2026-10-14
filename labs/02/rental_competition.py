@@ -10,6 +10,13 @@ import urllib.request
 import numpy as np
 import numpy.typing as npt
 
+from sklearn.linear_model import Ridge
+from sklearn.model_selection import GridSearchCV
+from sklearn.compose import ColumnTransformer
+from sklearn.preprocessing import StandardScaler, OneHotEncoder, PolynomialFeatures
+from sklearn.pipeline import Pipeline
+from sklearn.metrics import root_mean_squared_error
+
 parser = argparse.ArgumentParser()
 # These arguments will be set appropriately by ReCodEx, even if you change them.
 parser.add_argument("--predict", default=None, type=str, help="Path to the dataset to predict")
@@ -58,8 +65,40 @@ def main(args: argparse.Namespace) -> Optional[npt.ArrayLike]:
         np.random.seed(args.seed)
         train = Dataset()
 
+        train_data = train.data
+        train_target = train.target
+
         # TODO: Train a model on the given dataset and store it in `model`.
-        model = ...
+        
+        categorical_features_indices = [i for i in range(8)]
+        real_valued_features_indices = [i for i in range(8, 12)]
+
+        preprocessor = ColumnTransformer([
+            ('categorical', OneHotEncoder(sparse_output=False, handle_unknown="ignore"), categorical_features_indices),
+            ('real_valued', StandardScaler(), real_valued_features_indices)
+        ])
+
+        pipeline = Pipeline([
+            ('preprocessed', preprocessor),
+            ('polynomial', PolynomialFeatures(include_bias=False)),
+            ('linear_model', Ridge())
+        ])
+
+        param_grid = {
+            'linear_model__alpha': [0.001, 0.01, 0.1, 1.0, 10.0, 20.0, 50.0, 100.0, 1000.0],
+            'polynomial__degree': [1, 2, 3]
+        }
+
+        grid_search = GridSearchCV(
+            estimator=pipeline,
+            param_grid=param_grid,
+            scoring="neg_mean_squared_error",
+            n_jobs=-1
+        )
+
+        grid_search.fit(train_data, train_target)
+
+        model = grid_search.best_estimator_
 
         # Serialize the model.
         with lzma.open(args.model_path, "wb") as model_file:
@@ -69,11 +108,14 @@ def main(args: argparse.Namespace) -> Optional[npt.ArrayLike]:
         # Use the model and return test set predictions, either as a Python list or a NumPy array.
         test = Dataset(args.predict)
 
+        test_data = test.data
+
         with lzma.open(args.model_path, "rb") as model_file:
             model = pickle.load(model_file)
 
         # TODO: Generate `predictions` with the test set predictions.
-        predictions = ...
+
+        predictions = model.predict(test_data) 
 
         return predictions
 
