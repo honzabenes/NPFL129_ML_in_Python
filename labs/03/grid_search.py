@@ -21,12 +21,16 @@ def main(args: argparse.Namespace) -> float:
     dataset = sklearn.datasets.load_digits()
     dataset.target = dataset.target % 2
 
+    print(dataset.DESCR)
+
     # If you want to learn about the dataset, you can print some information
     # about it using `print(dataset.DESCR)`.
 
     # TODO: Split the dataset into a train set and a test set.
     # Use `sklearn.model_selection.train_test_split` method call, passing
     # arguments `test_size=args.test_size, random_state=args.seed`.
+
+    train_data, test_data, train_target, test_target = sklearn.model_selection.train_test_split(dataset.data, dataset.target, test_size=args.test_size, random_state=args.seed)
 
     # TODO: Create a pipeline, which
     # 1. passes the inputs through `sklearn.preprocessing.MinMaxScaler()`,
@@ -43,7 +47,34 @@ def main(args: argparse.Namespace) -> float:
     # For the best combination of parameters, compute the test set accuracy.
     #
     # The easiest way is to use `sklearn.model_selection.GridSearchCV`.
-    test_accuracy = ...
+
+    pipeline = sklearn.pipeline.Pipeline([
+        ('minmax', sklearn.preprocessing.MinMaxScaler()),
+        ('polynomial', sklearn.preprocessing.PolynomialFeatures()),
+        ('logistic_regression', sklearn.linear_model.LogisticRegression(random_state=args.seed))
+    ])
+
+    param_grid = {
+        'polynomial__degree': [1, 2],
+        'logistic_regression__C': [0.01, 1, 100],
+        'logistic_regression__solver': ['lbfgs', 'sag']
+    }
+
+    skf = sklearn.model_selection.StratifiedKFold(n_splits=5)
+
+    grid_search = sklearn.model_selection.GridSearchCV(
+        estimator=pipeline,
+        cv=skf,
+        param_grid=param_grid,
+        scoring="accuracy",
+        n_jobs=-1
+    )
+
+    grid_search.fit(train_data, train_target)
+
+    prediction = grid_search.predict(test_data)
+
+    test_accuracy = sklearn.metrics.accuracy_score(test_target, prediction)
 
     # If `model` is a fitted `GridSearchCV`, you can use the following code
     # to show the results of all the hyperparameter values evaluated:

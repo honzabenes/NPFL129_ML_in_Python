@@ -6,6 +6,11 @@ import pickle
 import sys
 from typing import Optional
 import urllib.request
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import PolynomialFeatures
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import GridSearchCV
 
 import numpy as np
 import numpy.typing as npt
@@ -18,6 +23,8 @@ parser.add_argument("--seed", default=42, type=int, help="Random seed")
 # For these and any other arguments you add, ReCodEx will keep your default value.
 parser.add_argument("--model_path", default="thyroid_competition.model", type=str, help="Model path")
 
+def sigmoid(x):
+    return 1 / (1 + np.exp(-x))
 
 class Dataset:
     """Thyroid Dataset.
@@ -52,7 +59,30 @@ def main(args: argparse.Namespace) -> Optional[npt.ArrayLike]:
         train = Dataset()
 
         # TODO: Train a model on the given dataset and store it in `model`.
-        model = ...
+
+        pipeline = Pipeline([
+            ('scaler', StandardScaler()),
+            ('polynomial', PolynomialFeatures()),
+            ('clf', LogisticRegression(max_iter=1000, random_state=args.seed))
+        ])
+
+        param_grid = {
+            'polynomial__degree': [1, 2],
+            'clf__max_iter': [500, 1000, 1500],
+            'clf__C': [0.01, 0.1, 1.0, 10.0],
+        }
+
+        grid_search = GridSearchCV(
+            estimator=pipeline,
+            param_grid=param_grid,
+            cv=5,
+            scoring='accuracy',
+            n_jobs=1
+        )
+
+        grid_search.fit(train.data, train.target)
+
+        model = grid_search.best_estimator_
 
         # Serialize the model.
         with lzma.open(args.model_path, "wb") as model_file:
@@ -65,8 +95,7 @@ def main(args: argparse.Namespace) -> Optional[npt.ArrayLike]:
         with lzma.open(args.model_path, "rb") as model_file:
             model = pickle.load(model_file)
 
-        # TODO: Generate `predictions` with the test set predictions.
-        predictions = ...
+        predictions = model.predict(test.data)
 
         return predictions
 
