@@ -21,6 +21,11 @@ import sys
 from typing import Optional
 import urllib.request
 
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.neural_network import MLPClassifier
+from sklearn.model_selection import GridSearchCV
+
 import numpy as np
 import numpy.typing as npt
 
@@ -62,14 +67,44 @@ def main(args: argparse.Namespace) -> Optional[npt.ArrayLike]:
         train = Dataset()
 
         # TODO: Train a model on the given dataset and store it in `model`.
-        model = ...
-
         # If you trained one or more MLPs, you can use the following code
         # to compress it significantly (approximately 12 times). The snippet
         # assumes the trained `MLPClassifier` is in the `mlp` variable.
         #   mlp._optimizer = mlp._best_coefs = mlp._best_intercepts = None
         #   for i in range(len(mlp.coefs_)): mlp.coefs_[i] = mlp.coefs_[i].astype(np.float16)
         #   for i in range(len(mlp.intercepts_)): mlp.intercepts_[i] = mlp.intercepts_[i].astype(np.float16)
+
+        pipeline = Pipeline([
+            ('scaler', StandardScaler()),
+            ('mlp', MLPClassifier(max_iter=1000, early_stopping=True, random_state=args.seed))
+        ])
+
+        param_grid = {
+            'mlp__hidden_layer_sizes': [(128, 64), (256,128)],
+            'mlp__activation': ['relu', 'tanh'],
+            'mlp__alpha': [0.0001, 0.001, 0.01],
+        }
+
+        grid_search = GridSearchCV(
+            estimator=pipeline,
+            param_grid=param_grid,
+            cv=5,
+            scoring='accuracy',
+            n_jobs=-1,
+            verbose=2
+        )
+
+        grid_search.fit(train.data, train.target)
+
+        model = grid_search.best_estimator_
+
+        best_mlp = model.named_steps['mlp']
+
+        best_mlp._optimizer = best_mlp._best_coefs = best_mlp._best_intercepts = None
+        for i in range(len(best_mlp.coefs_)):
+            best_mlp.coefs_[i] = best_mlp.coefs_[i].astype(np.float16)
+        for i in range(len(best_mlp.intercepts_)):
+            best_mlp.intercepts_[i] = best_mlp.intercepts_[i].astype(np.float16)
 
         # Serialize the model.
         with lzma.open(args.model_path, "wb") as model_file:
@@ -83,7 +118,7 @@ def main(args: argparse.Namespace) -> Optional[npt.ArrayLike]:
             model = pickle.load(model_file)
 
         # TODO: Generate `predictions` with the test set predictions.
-        predictions = ...
+        predictions = model.predict(test.data)
 
         return predictions
 
