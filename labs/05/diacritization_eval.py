@@ -32,3 +32,9 @@ if __name__ == "__main__":
     score = accuracy(gold, system)
 
     print("Accuracy: {:.2f}".format(100 * score))
+
+
+
+# mlp._optimizer = None
+# mlp.coefs_ = [w.astype(np.float32) for w in mlp.coefs_]
+# mlp.intercepts_ = [b.astype(np.float32) for b in mlp.intercepts_]

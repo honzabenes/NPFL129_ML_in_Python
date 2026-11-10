@@ -19,6 +19,7 @@ import numpy as np
 import sklearn.datasets
 import sklearn.metrics
 import sklearn.model_selection
+import sklearn.preprocessing
 
 parser = argparse.ArgumentParser()
 # These arguments will be set appropriately by ReCodEx, even if you change them.
@@ -32,6 +33,34 @@ parser.add_argument("--seed", default=42, type=int, help="Random seed")
 parser.add_argument("--test_size", default=0.5, type=lambda x: int(x) if x.isdigit() else float(x), help="Test size")
 # If you add more arguments, ReCodEx will keep them with your default values.
 
+def sigmoid(x):
+    return 1 / (1 + np.exp(-x))
+
+def get_f1_metrics(predictions, targets):
+    tps, fps, fns = [], [], []
+    f1s = []
+
+    for p_col, t_col in zip(zip(*predictions), zip(*targets)):
+        tp = sum(1 for p, t in zip(p_col, t_col) if p == 1 and t == 1)
+        fp = sum(1 for p, t in zip(p_col, t_col) if p == 1 and t == 0)
+        fn = sum(1 for p, t in zip(p_col, t_col) if p == 0 and t == 1)
+
+        tps.append(tp)
+        fps.append(fp)
+        fns.append(fn)
+
+        denom = 2 * tp + fp + fn
+        f1 = 2 * tp / denom if denom > 0 else 0.0
+
+        f1s.append(f1)
+
+    macro_f1 = sum(f1s) / len(f1s)
+
+    total_tp, total_fp, total_fn = sum(tps), sum(fps), sum(fns)
+    denom = 2 * total_tp + total_fp + total_fn
+    micro_f1 = 2 * total_tp / denom if denom > 0 else 0.0
+
+    return micro_f1, macro_f1
 
 def main(args: argparse.Namespace) -> tuple[np.ndarray, list[tuple[float, float]]]:
     # Create a random generator with a given seed.
@@ -45,7 +74,8 @@ def main(args: argparse.Namespace) -> tuple[np.ndarray, list[tuple[float, float]
     # TODO: The `target` is a list of classes for every input example. Convert
     # it to a dense representation (n-hot encoding) -- for each input example,
     # the target should be vector of `args.classes` binary indicators.
-    target = ...
+    binarizer = sklearn.preprocessing.MultiLabelBinarizer()
+    target = binarizer.fit_transform(target_list)
 
     # Append a constant feature with value 1 to the end of all input data.
     # Then we do not need to explicitly represent bias - it becomes the last weight.
@@ -66,12 +96,30 @@ def main(args: argparse.Namespace) -> tuple[np.ndarray, list[tuple[float, float]
         # TODO: Process the data in the order of `permutation`. For every
         # `args.batch_size` of them, average their gradient, and update the weights.
         # You can assume that `args.batch_size` exactly divides `train_data.shape[0]`.
-        ...
+        batch_count = train_data.shape[0] // args.batch_size
+
+        for i in range(batch_count):
+            start = i * args.batch_size
+            indices = permutation[start : start + args.batch_size]
+
+            batch_data = train_data[indices]
+            batch_target = train_target[indices]
+
+            probs = sigmoid(batch_data @ weights)
+
+            g = batch_data.T @ (probs - batch_target) / args.batch_size
+
+            weights -= args.learning_rate * g
 
         # TODO: After the SGD epoch, compute the micro-averaged and the
         # macro-averaged F1-score for both the train test and the test set.
         # Compute these scores manually, without using `sklearn.metrics`.
-        train_f1_micro, train_f1_macro, test_f1_micro, test_f1_macro = ...
+
+        train_prediction = sigmoid(train_data @ weights) >= 0.5
+        test_prediction = sigmoid(test_data @ weights) >= 0.5
+
+        train_f1_micro, train_f1_macro = get_f1_metrics(train_prediction, train_target)
+        test_f1_micro, test_f1_macro = get_f1_metrics(test_prediction, test_target)
 
         print("After epoch {}: train F1 micro {:.2f}% macro {:.2f}%, test F1 micro {:.2f}% macro {:.1f}%".format(
             epoch + 1, 100 * train_f1_micro, 100 * train_f1_macro, 100 * test_f1_micro, 100 * test_f1_macro))
