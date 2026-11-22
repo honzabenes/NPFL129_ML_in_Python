@@ -59,6 +59,10 @@ class MNIST:
         self.data = self.data.reshape([-1, 28*28]).astype(float)
 
 
+def lp(x, y, p):
+    return np.pow(np.sum(np.pow(np.abs(x - y), p), axis=1), 1 / p)
+
+
 def main(args: argparse.Namespace) -> float:
     # Load MNIST data, scale it to [0, 1] and split it to train and test.
     mnist = MNIST(data_size=args.train_size + args.test_size)
@@ -79,7 +83,39 @@ def main(args: argparse.Namespace) -> float:
     # - "uniform": all nearest neighbors have the same weight,
     # - "inverse": `1/distances` is used as weights,
     # - "softmax": `softmax(-distances)` is used as weights.
-    test_predictions = ...
+
+    test_predictions = np.zeros(len(test_data))
+
+    for i, point in enumerate(test_data):
+
+        dists = lp(point, train_data, args.p)
+
+        neighbors_indices = np.argpartition(dists, args.k - 1)[:args.k]
+        neighbors_targets = train_target[neighbors_indices]
+        neighbors_dists = dists[neighbors_indices]
+
+        weights = np.zeros(10)
+
+        if args.weights == "uniform":
+
+            for idx in range(len(neighbors_indices)):
+                weights[neighbors_targets[idx]] += 1
+                
+        if args.weights == "inverse":
+
+            for idx in range(len(neighbors_indices)):
+                weights[neighbors_targets[idx]] += 1 / neighbors_dists[idx]
+
+        if args.weights == "softmax":
+
+            norm_dists = neighbors_dists - min(neighbors_dists)
+            denom = np.sum(np.exp(-norm_dists))
+
+            for idx in range(len(neighbors_indices)):
+                weights[neighbors_targets[idx]] += np.exp(-norm_dists[idx]) / denom
+
+        test_predictions[i] = np.argmax(weights)
+
 
     accuracy = sklearn.metrics.accuracy_score(test_target, test_predictions)
 
