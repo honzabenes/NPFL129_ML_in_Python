@@ -61,11 +61,52 @@ def main(args: argparse.Namespace) -> tuple[float, float]:
     #
     # In all cases, the class prior is the distribution of the train data classes.
 
+    counts = np.bincount(train_target)
+    prior_probs = counts / train_target.size
+    log_priors = np.log(prior_probs)
+
+    features_count = train_data.shape[1]
+    probs = np.zeros((test_data.shape[0], args.classes))
+
+    if args.naive_bayes_type == 'gaussian':
+        for k in range(args.classes):
+            samples = train_data[train_target == k]
+            mean = np.mean(samples, axis=0)
+            var = np.var(samples, axis=0) + args.alpha
+
+            log_likelihood = scipy.stats.norm.logpdf(
+                test_data, loc=mean, scale=np.sqrt(var))
+            
+            probs[:, k] = log_priors[k] + np.sum(log_likelihood, axis=1)
+
+    elif args.naive_bayes_type == "multinomial":
+        p = np.zeros((args.classes, features_count))
+        for k in range(args.classes):
+            feature_sums = np.sum(train_data[train_target == k], axis=0) + args.alpha
+            p[k] = feature_sums / np.sum(feature_sums)
+
+        probs = test_data @ np.log(p).T + log_priors
+
+    elif args.naive_bayes_type == "bernoulli":
+        train_bin = (train_data >= 8)
+        test_bin = (test_data >= 8)
+
+        p = np.zeros((args.classes, features_count))
+        for k in range(args.classes):
+            feature_counts = np.sum(train_bin[train_target == k], axis=0)
+            p[k] = (feature_counts + args.alpha) / (counts[k] + 2 * args.alpha)
+
+        probs = test_bin @ np.log(p).T + (1.0 - test_bin) @ np.log(1.0 - p).T + log_priors
+
     # TODO: Predict the test data classes, and compute
     # - the test set accuracy, and
     # - the joint log-probability of the test set, i.e.,
     #     \sum_{(x_i, t_i) \in test set} \log P(x_i, t_i).
-    test_accuracy, test_log_probability = ...
+
+    predictions = np.argmax(probs, axis=1)
+    
+    test_accuracy = np.mean(predictions == test_target)
+    test_log_probability = np.sum(probs[np.arange(test_target.size), test_target])
 
     return 100 * test_accuracy, test_log_probability
 
